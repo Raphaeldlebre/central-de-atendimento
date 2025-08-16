@@ -1,10 +1,13 @@
 {
   "files": {
-    "main.js": "/central-de-atendimento/static/js/main.c4ae6041.js",
+    "main.css": "/central-de-atendimento/static/css/main.d519968d.css",
+    "main.js": "/central-de-atendimento/static/js/main.2900e04e.js",
     "index.html": "/central-de-atendimento/index.html",
-    "main.c4ae6041.js.map": "/central-de-atendimento/static/js/main.c4ae6041.js.map"
+    "main.d519968d.css.map": "/central-de-atendimento/static/css/main.d519968d.css.map",
+    "main.2900e04e.js.map": "/central-de-atendimento/static/js/main.2900e04e.js.map"
   },
   "entrypoints": [
-    "static/js/main.c4ae6041.js"
+    "static/css/main.d519968d.css",
+    "static/js/main.2900e04e.js"
   ]
 }
