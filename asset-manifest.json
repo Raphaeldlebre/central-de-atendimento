@@ -1,10 +1,10 @@
 {
   "files": {
-    "main.js": "/central-de-atendimento/static/js/main.2a8c3659.js",
+    "main.js": "/central-de-atendimento/static/js/main.c4ae6041.js",
     "index.html": "/central-de-atendimento/index.html",
-    "main.2a8c3659.js.map": "/central-de-atendimento/static/js/main.2a8c3659.js.map"
+    "main.c4ae6041.js.map": "/central-de-atendimento/static/js/main.c4ae6041.js.map"
   },
   "entrypoints": [
-    "static/js/main.2a8c3659.js"
+    "static/js/main.c4ae6041.js"
   ]
 }
