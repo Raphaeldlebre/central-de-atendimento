@@ -1,0 +1,7 @@
+üèóÔ∏è Rodando build... 
+
+> central-de-atendimento@1.0.0 build
+> react-scripts build
+
+'react-scripts' n∆o Ç reconhecido como um comando interno
+ou externo, um programa oper†vel ou um arquivo em lotes.
