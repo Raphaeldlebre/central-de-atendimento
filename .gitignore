@@ -1,8 +1,30 @@
+# Dependências
 node_modules/
+**/node_modules/
+
+# Builds
 dist/
 build/
+*.log
+
+# Ambientes
 .env
-backend/.env
+.env.local
 local.env
+backend/.env
+frontend/.env
+
+# IDEs e configs locais
 .vscode/
 .idea/
+*.swp
+*.swo
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Arquivos temporários
+*.zip
+*.tar
+*.gz
