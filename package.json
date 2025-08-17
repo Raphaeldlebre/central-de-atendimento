@@ -1,33 +1,20 @@
 {
-  "name": "central-de-atendimento",
+  "name": "central-atendimento-fullstack",
   "version": "1.0.0",
   "private": true,
-  "homepage": "https://seuusuario.github.io/central-de-atendimento",
-  "dependencies": {
-    "react": "^18.0.0",
-    "react-dom": "^18.0.0",
-    "react-scripts": "5.0.1"
-  },
+  "type": "module",
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "predeploy": "npm run build",
-    "deploy": "gh-pages -d build"
+    "dev": "node server.js",
+    "build": "npm run build:frontend",
+    "build:frontend": "cd frontend && npm ci && npm run build",
+    "start": "node server.js"
   },
-  "devDependencies": {
-    "gh-pages": "^6.0.0"
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
+  "dependencies": {
+    "dayjs": "^1.11.11",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "node-fetch": "^3.3.2",
+    "pg": "^8.11.3",
+    "uuid": "^9.0.1"
   }
 }
-
