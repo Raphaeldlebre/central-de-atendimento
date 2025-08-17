@@ -26,11 +26,12 @@ campaignsRouter.post('/', async (req,res)=>{
     frequency_unit = 'days';
   }
 
+  // insere no banco com filtros
   const { rows } = await query(`
     insert into campaigns
       (message, image_url, link_url, mode, date, hour,
-       frequency_value, frequency_unit, valid_until, status)
-    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+       frequency_value, frequency_unit, valid_until, status, filters)
+    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
     returning *`,
     [
       c.message,
@@ -42,7 +43,8 @@ campaignsRouter.post('/', async (req,res)=>{
       frequency_value,
       frequency_unit,
       c.validUntil || null,
-      'scheduled'
+      'scheduled',
+      c.filters ? JSON.stringify(c.filters) : '{}'
     ]
   );
   const camp = rows[0];
@@ -59,6 +61,7 @@ campaignsRouter.post('/', async (req,res)=>{
       message: camp.message,
       imageUrl: camp.image_url,
       link: camp.link_url,
+      filters: c.filters || {},
       schedule: camp.mode === 'single'
         ? { sendAt: c.scheduledAt }
         : { frequencyUnit: frequency_unit, frequencyValue: frequency_value, validityDate: c.validUntil },
