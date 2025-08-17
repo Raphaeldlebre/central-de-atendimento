@@ -1,45 +1,29 @@
-// Helpers de API para o frontend (Vite)
-const BASE = (import.meta.env.VITE_API_BASE || '').replace(/\/+$/,''); // ex: https://central-backend-xxxx.onrender.com
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:10000/api";
 
 async function request(path, options = {}) {
-  const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
+  const res = await fetch(API_BASE + path, {
+    headers: { "Content-Type": "application/json" },
     ...options,
   });
-  if (!res.ok) {
-    const text = await res.text().catch(()=> '');
-    throw new Error(text || `HTTP ${res.status}`);
-  }
-  // tenta JSON; se falhar, retorna texto
-  const ct = res.headers.get('content-type') || '';
-  if (ct.includes('application/json')) return res.json();
-  return res.text();
+  if (!res.ok) throw new Error(await res.text());
+  return res.headers.get("content-type")?.includes("application/json")
+    ? res.json()
+    : res.text();
 }
 
-export function apiGet(path) {
-  return request(path, { method: 'GET' });
-}
-
-export function apiPost(path, body) {
-  return request(path, { method: 'POST', body: JSON.stringify(body || {}) });
-}
-
-export function apiDel(path) {
-  return request(path, { method: 'DELETE' });
-}
+export const apiGet = (path) => request(path);
+export const apiPost = (path, body) => request(path, { method: "POST", body: JSON.stringify(body) });
+export const apiDel = (path) => request(path, { method: "DELETE" });
 
 export async function downloadHistoryCSV() {
-  const res = await fetch(`${BASE}/api/history/export`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const res = await fetch(API_BASE + "/history/export");
   const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
   a.href = url;
-  a.download = 'history.csv';
-  document.body.appendChild(a);
+  a.download = "historico.csv";
   a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+  window.URL.revokeObjectURL(url);
 }
 
-export { BASE as API_BASE };
+export { API_BASE };
