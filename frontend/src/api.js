@@ -1,21 +1,45 @@
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:10000';
+// Helpers de API para o frontend (Vite)
+const BASE = (import.meta.env.VITE_API_BASE || '').replace(/\/+$/,''); // ex: https://central-backend-xxxx.onrender.com
 
-export async function apiGet(path) {
-  const r = await fetch(API_BASE + path);
-  if (!r.ok) throw new Error('Erro ' + r.status);
-  return r.json();
-}
-export async function apiPost(path, body) {
-  const r = await fetch(API_BASE + path, {
-    method: 'POST',
+async function request(path, options = {}) {
+  const res = await fetch(`${BASE}${path}`, {
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
+    ...options,
   });
-  if (!r.ok) throw new Error('Erro ' + r.status);
-  return r.json();
+  if (!res.ok) {
+    const text = await res.text().catch(()=> '');
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+  // tenta JSON; se falhar, retorna texto
+  const ct = res.headers.get('content-type') || '';
+  if (ct.includes('application/json')) return res.json();
+  return res.text();
 }
-export async function apiDel(path) {
-  const r = await fetch(API_BASE + path, { method: 'DELETE' });
-  if (!r.ok) throw new Error('Erro ' + r.status);
-  return r.json();
+
+export function apiGet(path) {
+  return request(path, { method: 'GET' });
 }
+
+export function apiPost(path, body) {
+  return request(path, { method: 'POST', body: JSON.stringify(body || {}) });
+}
+
+export function apiDel(path) {
+  return request(path, { method: 'DELETE' });
+}
+
+export async function downloadHistoryCSV() {
+  const res = await fetch(`${BASE}/api/history/export`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'history.csv';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+export { BASE as API_BASE };
