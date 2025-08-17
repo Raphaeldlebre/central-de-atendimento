@@ -1,222 +1,313 @@
-import React, { useEffect, useState } from 'react';
-import { createRoot } from 'react-dom/client';
-import { apiGet, apiPost, apiDel, downloadHistoryCSV } from './api';
+import { useEffect, useState } from "react";
+import axios from "axios";
 
-// Componentes base
-function Card({ title, right, children }) {
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:10000/api";
+
+export default function App() {
+  const [tab, setTab] = useState("create"); // "create" | "history"
+  const [apiOnline, setApiOnline] = useState(false);
+  const [campaigns, setCampaigns] = useState([]);
+
+  // form state
+  const [message, setMessage] = useState("");
+  const [useVendor, setUseVendor] = useState(false);
+  const [vendor, setVendor] = useState("");
+  const [useTag, setUseTag] = useState(false);
+  const [tag, setTag] = useState("");
+  const [useLastActivity, setUseLastActivity] = useState(false);
+  const [lastActivity, setLastActivity] = useState("");
+  const [type, setType] = useState("single");
+  const [date, setDate] = useState("");
+  const [validUntil, setValidUntil] = useState("");
+  const [repeatDays, setRepeatDays] = useState(1);
+
+  // health check
+  useEffect(() => {
+    axios
+      .get(`${API_URL}/health`)
+      .then(() => setApiOnline(true))
+      .catch(() => setApiOnline(false));
+  }, []);
+
+  // carregar histórico
+  const loadCampaigns = () => {
+    axios
+      .get(`${API_URL}/campaigns`)
+      .then((res) => setCampaigns(res.data))
+      .catch(() => setCampaigns([]));
+  };
+
+  useEffect(() => {
+    if (tab === "history") loadCampaigns();
+  }, [tab]);
+
+  // criar campanha
+  const createCampaign = async () => {
+    try {
+      await axios.post(`${API_URL}/campaigns`, {
+        message,
+        filters: {
+          useVendor,
+          vendor,
+          useTag,
+          tag,
+          useLastActivity,
+          lastActivityMonths: Number(lastActivity) || 0,
+        },
+        type,
+        scheduledAt: type === "single" ? date : null,
+        validUntil: type === "recurring" ? validUntil : null,
+        repeatEveryDays: type === "recurring" ? repeatDays : null,
+      });
+      alert("Campanha criada!");
+      // limpar formulário
+      setMessage("");
+      setUseVendor(false);
+      setVendor("");
+      setUseTag(false);
+      setTag("");
+      setUseLastActivity(false);
+      setLastActivity("");
+      setDate("");
+      setValidUntil("");
+      setRepeatDays(1);
+    } catch (err) {
+      alert("Erro ao criar campanha");
+    }
+  };
+
+  // cancelar campanha
+  const cancelCampaign = async (id) => {
+    if (!confirm("Cancelar esta campanha?")) return;
+    await axios.post(`${API_URL}/campaigns/${id}/cancel`);
+    loadCampaigns();
+  };
+
+  // excluir campanha
+  const deleteCampaign = async (id) => {
+    if (!confirm("Excluir definitivamente?")) return;
+    await axios.delete(`${API_URL}/campaigns/${id}`);
+    loadCampaigns();
+  };
+
   return (
-    <section style={{
-      background:'#121827', border:'1px solid #1f2937', borderRadius:14,
-      padding:18, marginBottom:20
-    }}>
-      <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12}}>
-        <h3 style={{margin:0, fontSize:16, color:'#e5e7eb', fontWeight:600}}>{title}</h3>
-        {right}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function Button({ variant='primary', ...props }) {
-  const styles = {
-    primary: { background:'#2563eb', color:'#fff', border:'1px solid #1e40af' },
-    ghost:   { background:'transparent', color:'#e5e7eb', border:'1px solid #263244' },
-    danger:  { background:'#b91c1c', color:'#fff', border:'1px solid #7f1d1d' }
-  }[variant];
-  return (
-    <button
-      {...props}
-      style={{
-        ...styles,
-        borderRadius:10, padding:'8px 14px', cursor:'pointer',
-        fontWeight:600, fontSize:13
-      }}
-    />
-  );
-}
-
-function Input(props) {
-  return <input {...props} style={{
-    ...props.style,
-    background:'#0b1220', color:'#e5e7eb', border:'1px solid #263244',
-    borderRadius:10, padding:'8px 12px', outline:'none'
-  }}/>;
-}
-function Textarea(props) {
-  return <textarea {...props} style={{
-    ...props.style,
-    background:'#0b1220', color:'#e5e7eb', border:'1px solid #263244',
-    borderRadius:10, padding:'8px 12px', outline:'none', resize:'vertical'
-  }}/>;
-}
-function Select(props) {
-  return <select {...props} style={{
-    ...props.style,
-    background:'#0b1220', color:'#e5e7eb', border:'1px solid #263244',
-    borderRadius:10, padding:'8px 12px', outline:'none'
-  }}/>;
-}
-
-// Formulário de criação
-function CreateCampaignForm({ onCreated }) {
-  const [message, setMessage] = useState('');
-  const [type, setType] = useState('single');
-  const [date, setDate] = useState('');
-  const [validUntil, setValidUntil] = useState('');
-  const [repeatDays, setRepeatDays] = useState('');
-  const [filters, setFilters] = useState({
-    useAgent:false, agent:'',
-    useTag:false, tag:'',
-    useLastActivity:false, lastActivityMonths:0
-  });
-  const [link, setLink] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
-  const [showLink, setShowLink] = useState(false);
-  const [showImage, setShowImage] = useState(false);
-  const [alert, setAlert] = useState(null);
-
-  async function submit() {
-    const body = { message, type, date, validUntil, repeatDays, filters, link, imageUrl };
-    const r = await apiPost('/api/campaigns', body);
-    setAlert(`Campanha criada (id ${r.id}) ✅`);
-    setMessage(''); setType('single'); setDate(''); setValidUntil('');
-    setRepeatDays(''); setLink(''); setImageUrl('');
-    setShowLink(false); setShowImage(false);
-    onCreated?.();
-    setTimeout(()=>setAlert(null), 3000);
-  }
-
-  return (
-    <Card title="Criar campanha">
-      <div style={{display:'grid', gap:12}}>
-        {alert && <div style={{background:'#064e3b', color:'#a7f3d0', padding:8, borderRadius:8}}>{alert}</div>}
-
-        <label>Mensagem <Textarea value={message} onChange={e=>setMessage(e.target.value)} /></label>
-
-        <label>Tipo
-          <Select value={type} onChange={e=>setType(e.target.value)}>
-            <option value="single">Evento único</option>
-            <option value="recurring">Evento recorrente</option>
-          </Select>
-        </label>
-
-        <label>Data e hora <Input type="datetime-local" value={date} onChange={e=>setDate(e.target.value)} /></label>
-
-        {type==='recurring' && (
-          <>
-            <label>Validade (até quando) <Input type="date" value={validUntil} onChange={e=>setValidUntil(e.target.value)} /></label>
-            <label>Dias para repetir <Input type="number" min="1" value={repeatDays} onChange={e=>setRepeatDays(e.target.value)} /></label>
-          </>
-        )}
-
-        {/* Filtros organizados */}
-        <div style={{display:'grid', gap:8}}>
-          <div style={{display:'flex', alignItems:'center', gap:10}}>
-            <input type="checkbox" checked={filters.useAgent} onChange={e=>setFilters({...filters, useAgent:e.target.checked})}/>
-            <Input placeholder="Vendedor" value={filters.agent} onChange={e=>setFilters({...filters, agent:e.target.value})}/>
-          </div>
-          <div style={{display:'flex', alignItems:'center', gap:10}}>
-            <input type="checkbox" checked={filters.useTag} onChange={e=>setFilters({...filters, useTag:e.target.checked})}/>
-            <Input placeholder="Tag" value={filters.tag} onChange={e=>setFilters({...filters, tag:e.target.value})}/>
-          </div>
-          <div style={{display:'flex', alignItems:'center', gap:10}}>
-            <input type="checkbox" checked={filters.useLastActivity} onChange={e=>setFilters({...filters, useLastActivity:e.target.checked})}/>
-            <Input type="number" placeholder="Última atividade (meses)" value={filters.lastActivityMonths} onChange={e=>setFilters({...filters, lastActivityMonths:e.target.value})}/>
-          </div>
+    <div className="p-6 text-white bg-[#0d1117] min-h-screen">
+      <header className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold flex items-center gap-2">
+          <span>🔔</span> Central de Campanhas
+        </h1>
+        <div className="flex items-center gap-2">
+          <span
+            className={`px-3 py-1 rounded text-sm ${
+              apiOnline ? "bg-green-700" : "bg-red-700"
+            }`}
+          >
+            API {apiOnline ? "online ✅" : "offline ⚠️"}
+          </span>
+          <button
+            onClick={() => setTab("create")}
+            className={`px-4 py-2 rounded ${
+              tab === "create" ? "bg-blue-600" : "bg-gray-700"
+            }`}
+          >
+            Criar campanha
+          </button>
+          <button
+            onClick={() => setTab("history")}
+            className={`px-4 py-2 rounded ${
+              tab === "history" ? "bg-blue-600" : "bg-gray-700"
+            }`}
+          >
+            Ver histórico
+          </button>
         </div>
+      </header>
 
-        {/* Link e Imagem */}
-        {showLink && <Input placeholder="URL" value={link} onChange={e=>setLink(e.target.value)}/>}
-        {showImage && <Input placeholder="Imagem URL" value={imageUrl} onChange={e=>setImageUrl(e.target.value)}/>}
+      {tab === "create" && (
+        <div className="bg-gray-900 rounded-xl p-6">
+          <h2 className="text-lg font-semibold mb-4">Mensagens e filtros</h2>
 
-        <div style={{display:'flex', gap:10}}>
-          <Button variant="ghost" onClick={()=>setShowLink(!showLink)}>+ Adicionar link</Button>
-          <Button variant="ghost" onClick={()=>setShowImage(!showImage)}>+ Adicionar imagem</Button>
-          <Button onClick={submit}>🚀 Agendar</Button>
+          <label className="block mb-2">Mensagem</label>
+          <textarea
+            className="w-full p-2 rounded bg-gray-800 mb-4"
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            placeholder="Escreva a mensagem..."
+          />
+
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={useVendor}
+                onChange={(e) => setUseVendor(e.target.checked)}
+              />
+              <span>Filtrar por Vendedor</span>
+              <input
+                type="text"
+                disabled={!useVendor}
+                className="flex-1 p-1 rounded bg-gray-800"
+                value={vendor}
+                onChange={(e) => setVendor(e.target.value)}
+              />
+            </label>
+
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={useTag}
+                onChange={(e) => setUseTag(e.target.checked)}
+              />
+              <span>Filtrar por Tag</span>
+              <input
+                type="text"
+                disabled={!useTag}
+                className="flex-1 p-1 rounded bg-gray-800"
+                value={tag}
+                onChange={(e) => setTag(e.target.value)}
+              />
+            </label>
+
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={useLastActivity}
+                onChange={(e) => setUseLastActivity(e.target.checked)}
+              />
+              <span>Última atividade (meses)</span>
+              <input
+                type="number"
+                disabled={!useLastActivity}
+                className="w-20 p-1 rounded bg-gray-800"
+                value={lastActivity}
+                onChange={(e) => setLastActivity(e.target.value)}
+              />
+            </label>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <label>
+              Modo de envio
+              <select
+                className="w-full p-2 rounded bg-gray-800"
+                value={type}
+                onChange={(e) => setType(e.target.value)}
+              >
+                <option value="single">Evento único</option>
+                <option value="recurring">Recorrente</option>
+              </select>
+            </label>
+
+            <label>
+              Data/Hora
+              <input
+                type="datetime-local"
+                className="w-full p-2 rounded bg-gray-800"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+              />
+            </label>
+
+            {type === "recurring" && (
+              <>
+                <label>
+                  Validade
+                  <input
+                    type="date"
+                    className="w-full p-2 rounded bg-gray-800"
+                    value={validUntil}
+                    onChange={(e) => setValidUntil(e.target.value)}
+                  />
+                </label>
+                <label>
+                  Repetir a cada (dias)
+                  <input
+                    type="number"
+                    className="w-full p-2 rounded bg-gray-800"
+                    value={repeatDays}
+                    onChange={(e) => setRepeatDays(e.target.value)}
+                  />
+                </label>
+              </>
+            )}
+          </div>
+
+          <button
+            onClick={createCampaign}
+            className="px-6 py-2 bg-blue-600 rounded hover:bg-blue-700"
+          >
+            Agendar campanha 🚀
+          </button>
         </div>
-      </div>
-    </Card>
-  );
-}
+      )}
 
-// Histórico
-function HistoryTable({ history, onClear, onCancel }) {
-  return (
-    <Card title="Histórico" right={
-      <div style={{display:'flex', gap:10}}>
-        <Button variant="ghost" onClick={()=>downloadHistoryCSV()}>⬇️ Exportar CSV</Button>
-        <Button variant="ghost" onClick={onClear}>🧹 Limpar histórico</Button>
-      </div>
-    }>
-      <table style={{width:'100%', borderSpacing:0, color:'#e5e7eb', fontSize:14}}>
-        <thead>
-          <tr style={{textAlign:'left', color:'#9ca3af'}}>
-            <th>ID</th><th>Status</th><th>Tipo</th><th>Mensagem</th>
-            <th>Filtros</th><th>Agendado/Start</th><th>Validade</th><th>Ações</th>
-          </tr>
-        </thead>
-        <tbody>
-          {history.length===0 ? (
-            <tr><td colSpan={8} style={{padding:20, textAlign:'center', color:'#6b7280'}}>Sem registros.</td></tr>
-          ):history.map(h=>(
-            <tr key={h.id}>
-              <td>#{h.id}</td>
-              <td>{h.status}</td>
-              <td>{h.type}</td>
-              <td>{h.message}</td>
-              <td>{JSON.stringify(h.filters)}</td>
-              <td>{h.startDate || '-'}</td>
-              <td>{h.validUntil || '-'}</td>
-              <td>
-                {(h.status==='scheduled' || h.status==='running') && (
-                  <Button variant="danger" onClick={()=>onCancel(h.id)}>Cancelar</Button>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </Card>
-  );
-}
-
-// App principal
-function App() {
-  const [view, setView] = useState('create');
-  const [history, setHistory] = useState([]);
-
-  async function loadHistory() {
-    const h = await apiGet('/api/history');
-    setHistory(h);
-  }
-  async function clearHistory() {
-    await apiDel('/api/history');
-    loadHistory();
-  }
-  async function cancelCampaign(id) {
-    await apiDel(`/api/campaigns/${id}`);
-    loadHistory();
-  }
-
-  return (
-    <div style={{padding:20, background:'#0b0f1a', minHeight:'100vh', color:'#e5e7eb'}}>
-      <div style={{display:'flex', justifyContent:'space-between', marginBottom:20}}>
-        <h1 style={{margin:0}}>🔔 Central de Campanhas</h1>
-        <div style={{display:'flex', gap:10}}>
-          <Button variant={view==='create'?'primary':'ghost'} onClick={()=>setView('create')}>Criar campanha</Button>
-          <Button variant={view==='history'?'primary':'ghost'} onClick={()=>{setView('history'); loadHistory();}}>Ver histórico</Button>
+      {tab === "history" && (
+        <div className="bg-gray-900 rounded-xl p-6">
+          <h2 className="text-lg font-semibold mb-4">Histórico de campanhas</h2>
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-gray-700">
+                <th>ID</th>
+                <th>Status</th>
+                <th>Tipo</th>
+                <th>Mensagem</th>
+                <th>Filtros</th>
+                <th>Agendado/Start</th>
+                <th>Validade</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {campaigns.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="text-center py-4 text-gray-400">
+                    Sem registros
+                  </td>
+                </tr>
+              )}
+              {campaigns.map((c) => (
+                <tr
+                  key={c.id}
+                  className="border-b border-gray-800 hover:bg-gray-800"
+                >
+                  <td>{c.id}</td>
+                  <td>{c.status}</td>
+                  <td>{c.mode}</td>
+                  <td>{c.message}</td>
+                  <td>
+                    {c.filter_vendor || c.filter_tag || c.last_activity_months
+                      ? `${c.filter_vendor || ""} ${c.filter_tag || ""} ${
+                          c.last_activity_months
+                            ? `${c.last_activity_months}m`
+                            : ""
+                        }`
+                      : "-"}
+                  </td>
+                  <td>{c.date || "-"}</td>
+                  <td>{c.valid_until || "-"}</td>
+                  <td className="flex gap-2">
+                    {c.status === "scheduled" && (
+                      <button
+                        onClick={() => cancelCampaign(c.id)}
+                        className="px-2 py-1 bg-yellow-600 rounded"
+                      >
+                        Cancelar
+                      </button>
+                    )}
+                    <button
+                      onClick={() => deleteCampaign(c.id)}
+                      className="px-2 py-1 bg-red-600 rounded"
+                    >
+                      Excluir
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-      </div>
-
-      {view==='create'
-        ? <CreateCampaignForm onCreated={loadHistory}/>
-        : <HistoryTable history={history} onClear={clearHistory} onCancel={cancelCampaign}/>
-      }
+      )}
     </div>
   );
 }
-
-createRoot(document.getElementById('root')).render(<App />);
-
 
