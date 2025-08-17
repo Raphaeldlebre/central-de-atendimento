@@ -19,8 +19,10 @@ async function migrate() {
       frequency_unit varchar(20),
       valid_until date,
       status varchar(20) not null default 'scheduled',
-      created_at timestamptz not null default now()
+      created_at timestamptz not null default now(),
+      filters jsonb default '{}'   -- <<< adicionando os filtros em formato JSON
     );
+
     create table if not exists history (
       id serial primary key,
       campaign_id int references campaigns(id) on delete cascade,
@@ -28,8 +30,10 @@ async function migrate() {
       detail text,
       created_at timestamptz not null default now()
     );
+
     create index if not exists idx_history_campaign on history(campaign_id);
   `);
+
   console.log("✔ Migração aplicada.");
   process.exit(0);
 }
@@ -38,3 +42,5 @@ migrate().catch(err => {
   console.error(err);
   process.exit(1);
 });
+
+

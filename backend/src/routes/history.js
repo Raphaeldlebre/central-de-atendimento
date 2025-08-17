@@ -1,42 +1,40 @@
-import express from 'express';
-import { query } from '../db.js';
-import { stringify } from 'csv-stringify';
+import express from "express";
+import { query } from "../db.js";
+import { stringify } from "csv-stringify/sync";
 
-export const historyRouter = express.Router();
+const router = express.Router();
 
-historyRouter.get('/', async (req,res)=>{
-  const { rows } = await query(`
-    select h.*, c.message, c.mode 
-    from history h
-    left join campaigns c on c.id = h.campaign_id
-    order by h.id desc
-  `);
-  res.json(rows);
+// Listar histórico
+router.get("/", async (req, res) => {
+  try {
+    const result = await query("select * from history order by created_at desc");
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erro ao listar histórico" });
+  }
 });
 
-historyRouter.delete('/', async (req,res)=>{
-  await query('truncate table history restart identity');
-  res.json({ ok:true });
+// Exportar histórico em CSV
+router.get("/export", async (req, res) => {
+  try {
+    const result = await query(
+      `select h.id, h.campaign_id, h.event, h.detail, h.created_at,
+              c.message as campaign_message
+         from history h
+         left join campaigns c on h.campaign_id = c.id
+        order by h.created_at desc`
+    );
+
+    const csv = stringify(result.rows, { header: true });
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", "attachment; filename=historico.csv");
+    res.send(csv);
+  } catch (err) {
+    console.error("Erro ao exportar histórico:", err);
+    res.status(500).json({ error: "Erro ao exportar histórico" });
+  }
 });
 
-historyRouter.get('/export', async (req,res)=>{
-  const { rows } = await query(`
-    select h.id, h.created_at, h.event, h.detail, h.campaign_id
-    from history h order by h.id desc
-  `);
-  res.setHeader('Content-Type','text/csv; charset=utf-8');
-  res.setHeader('Content-Disposition','attachment; filename="history.csv"');
-  const stringifier = stringify({ header:true });
-  stringifier.pipe(res);
-  rows.forEach(r => stringifier.write(r));
-  stringifier.end();
-});
+export default router;
 
-historyRouter.post('/', async (req,res)=>{
-  // callback do n8n
-  const { campaignId, status, error, total, sent, batchId, raw } = req.body || {};
-  if (!campaignId) return res.status(400).json({ error: 'campaignId obrigatório' });
-  await query(`insert into history (campaign_id, event, detail) values ($1,$2,$3)`,
-    [campaignId, status || 'update', error || JSON.stringify({ total, sent, batchId, raw })]);
-  res.json({ ok:true });
-});

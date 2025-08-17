@@ -1,91 +1,101 @@
-import express from 'express';
-import { query } from '../db.js';
-import fetch from 'node-fetch';
+import express from "express";
+import { query } from "../db.js";
+import fetch from "node-fetch";
 
-export const campaignsRouter = express.Router();
+const router = express.Router();
 
-// list
-campaignsRouter.get('/', async (req,res)=>{
-  const status = req.query.status;
-  let sql = 'select * from campaigns';
-  const params = [];
-  if (status && status !== 'all') {
-    params.push(status);
-    sql += ' where status = $1';
+// Listar campanhas
+router.get("/", async (req, res) => {
+  try {
+    const result = await query("select * from campaigns order by created_at desc");
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erro ao listar campanhas" });
   }
-  sql += ' order by id desc';
-  const { rows } = await query(sql, params);
-  res.json(rows);
 });
 
-// create
-campaignsRouter.post('/', async (req,res)=>{
-  const c = req.body || {};
-  const fields = [
-    'message','image_url','link_url','filter_vendor','filter_tag','last_activity_months',
-    'mode','date','hour','block_size','frequency_value','frequency_unit','valid_until','status'
-  ];
-  const values = fields.map(k => c[k] ?? null);
-  values[13] = c.status ?? 'scheduled';
+// Criar campanha
+router.post("/", async (req, res) => {
+  try {
+    const {
+      message,
+      image_url,
+      link_url,
+      filter_vendor,
+      filter_tag,
+      last_activity_months,
+      mode,
+      date,
+      hour,
+      block_size,
+      frequency_value,
+      frequency_unit,
+      valid_until,
+      status,
+      filters,
+    } = req.body;
 
-  const placeholders = fields.map((_,i)=>'$'+(i+1)).join(',');
-  const { rows } = await query(
-    `insert into campaigns (${fields.join(',')}) values (${placeholders}) returning *`, values
-  );
-  const camp = rows[0];
+    const result = await query(
+      `insert into campaigns
+        (message, image_url, link_url, filter_vendor, filter_tag, last_activity_months,
+         mode, date, hour, block_size, frequency_value, frequency_unit, valid_until,
+         status, filters)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+       returning *`,
+      [
+        message,
+        image_url,
+        link_url,
+        filter_vendor,
+        filter_tag,
+        last_activity_months,
+        mode,
+        date,
+        hour,
+        block_size,
+        frequency_value,
+        frequency_unit,
+        valid_until,
+        status,
+        filters,
+      ]
+    );
 
-  // registra no histórico
-  await query(`insert into history (campaign_id, event, detail) values ($1,$2,$3)`,
-    [camp.id, 'created', 'Campanha criada']);
+    const created = result.rows[0];
+    res.json(created);
 
-  // dispara no n8n (opcional)
-  if (process.env.N8N_WEBHOOK_URL) {
-    const payload = {
-      campaignId: camp.id,
-      type: camp.mode === 'single' ? 'single' : 'recurring',
-      message: camp.message,
-      imageUrl: camp.image_url,
-      link: camp.link_url,
-      filters: {
-        useAgent: !!camp.filter_vendor, agent: camp.filter_vendor || '',
-        useTag: !!camp.filter_tag, tag: camp.filter_tag || '',
-        useLastActivity: !!camp.last_activity_months, lastActivityMonths: camp.last_activity_months || 0
-      },
-      schedule: camp.mode === 'single'
-        ? { sendAt: camp.date ? `${camp.date}T${String(camp.hour||0).padStart(2,'0')}:00:00Z` : null }
-        : { frequencyUnit: camp.frequency_unit, frequencyValue: camp.frequency_value, validityDate: camp.valid_until },
-      callbackUrl: (process.env.BACKEND_PUBLIC_URL || '') + '/api/history',
-      chatroot: { accountId: process.env.ACCOUNT_ID || '2', token: process.env.API_ACCESS_TOKEN || '' }
-    };
+    // 🔔 Notificar n8n se configurado
     try {
-      await fetch(process.env.N8N_WEBHOOK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      await query(`insert into history (campaign_id, event, detail) values ($1,$2,$3)`,
-        [camp.id, 'queued', 'Enviado para n8n']);
-    } catch (e) {
-      await query(`insert into history (campaign_id, event, detail) values ($1,$2,$3)`,
-        [camp.id, 'error', String(e.message || e)]);
+      const webhook = process.env.N8N_WEBHOOK_URL;
+      if (webhook) {
+        await fetch(webhook, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(created),
+        });
+      }
+    } catch (err) {
+      console.error("Falha ao notificar n8n:", err);
     }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erro ao criar campanha" });
   }
-
-  res.status(201).json(camp);
 });
 
-// delete
-campaignsRouter.delete('/:id', async (req,res)=>{
-  const id = Number(req.params.id);
-  await query('delete from campaigns where id=$1',[id]);
-  res.json({ ok:true });
+// Excluir campanha
+router.delete("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    await query("delete from campaigns where id = $1", [id]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erro ao excluir/cancelar campanha" });
+  }
 });
 
-// cancel
-campaignsRouter.post('/:id/cancel', async (req,res)=>{
-  const id = Number(req.params.id);
-  await query('update campaigns set status=$1 where id=$2',['canceled', id]);
-  await query(`insert into history (campaign_id, event, detail) values ($1,$2,$3)`,
-    [id, 'canceled', 'Cancelada pelo usuário']);
-  res.json({ ok:true });
-});
+export default router;
+
+

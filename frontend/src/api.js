@@ -1,4 +1,8 @@
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:10000/api";
+// src/api.js
+const API_BASE =
+  import.meta.env.VITE_API_URL ||         // nome padrão que vamos usar
+  import.meta.env.VITE_API_BASE ||        // compatibilidade com seu .env atual
+  "https://central-backend-7407.onrender.com"; // fallback correto SEM /api
 
 async function request(path, options = {}) {
   const res = await fetch(API_BASE + path, {

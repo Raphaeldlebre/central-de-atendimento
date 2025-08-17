@@ -1,168 +1,256 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { apiGet, apiPost, apiDel } from "./api";
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState("criar");
-  const [modoEnvio, setModoEnvio] = useState("unico");
-  const [mensagemExtraFoto, setMensagemExtraFoto] = useState(false);
-  const [mensagemExtraUrl, setMensagemExtraUrl] = useState(false);
+  const [tab, setTab] = useState("create");
+  const [apiOnline, setApiOnline] = useState(false);
 
-  // Mock do histórico
-  const [historico, setHistorico] = useState([
-    { id: 1, status: "done", tag: "Promoção", vendedor: "Ana", ultima: 2, mensagem: "Oferta imperdível!", data: "2025-08-20" },
-    { id: 2, status: "scheduled", tag: "Black Friday", vendedor: "Carlos", ultima: 5, mensagem: "Descontos exclusivos!", data: "2025-11-25" },
-  ]);
+  // Formulário
+  const [tag, setTag] = useState("");
+  const [vendor, setVendor] = useState("");
+  const [lastActivity, setLastActivity] = useState("");
+  const [mode, setMode] = useState("single");
+  const [date, setDate] = useState("");
+  const [validUntil, setValidUntil] = useState("");
+  const [interval, setInterval] = useState("");
+  const [message, setMessage] = useState("");
 
-  const limparHistorico = () => {
-    setHistorico(historico.filter(h => h.status !== "done" && h.status !== "error"));
-  };
+  // extras
+  const [addPhotoMsg, setAddPhotoMsg] = useState(false);
+  const [photoMsg, setPhotoMsg] = useState("");
+  const [addUrlMsg, setAddUrlMsg] = useState(false);
+  const [urlMsg, setUrlMsg] = useState("");
 
-  const cancelarItem = (id) => {
-    setHistorico(historico.filter(h => h.id !== id));
-  };
+  const [campaigns, setCampaigns] = useState([]);
+
+  useEffect(() => {
+    checkApi();
+    loadCampaigns();
+  }, []);
+
+  async function checkApi() {
+    try {
+      await apiGet("/ping");
+      setApiOnline(true);
+    } catch {
+      setApiOnline(false);
+    }
+  }
+
+  async function loadCampaigns() {
+    try {
+      const data = await apiGet("/campaigns");
+      setCampaigns(data || []);
+    } catch {
+      setCampaigns([]);
+    }
+  }
+
+  async function createCampaign() {
+    const payload = {
+      filter_tag: tag || null,
+      filter_vendor: vendor || null,
+      last_activity_months: lastActivity ? Number(lastActivity) : null,
+      mode,
+      date: mode === "single" ? (date || null) : null,
+      valid_until: mode === "recurring" ? (validUntil || null) : null,
+      frequency_value: mode === "recurring" ? (interval ? Number(interval) : null) : null,
+      frequency_unit: mode === "recurring" ? "d" : null,
+      message,
+      image_url: addPhotoMsg ? photoMsg : null,
+      link_url: addUrlMsg ? urlMsg : null,
+      status: "scheduled",
+      filters: {
+        // opcional: mantemos filtros também em JSON
+        tag: tag || null,
+        vendor: vendor || null,
+        lastActivityMonths: lastActivity ? Number(lastActivity) : null,
+      },
+    };
+
+    await apiPost("/campaigns", payload);
+    await loadCampaigns();
+    resetForm();
+    setTab("history");
+  }
+
+  function resetForm() {
+    setTag("");
+    setVendor("");
+    setLastActivity("");
+    setMode("single");
+    setDate("");
+    setValidUntil("");
+    setInterval("");
+    setMessage("");
+    setAddPhotoMsg(false);
+    setPhotoMsg("");
+    setAddUrlMsg(false);
+    setUrlMsg("");
+  }
+
+  async function deleteCampaign(id) {
+    await apiDel(`/campaigns/${id}`);
+    loadCampaigns();
+  }
+
+  async function clearHistory() {
+    // remove só "done" e "error"
+    const idsToDelete = campaigns
+      .filter((c) => c.status === "done" || c.status === "error")
+      .map((c) => c.id);
+    for (let id of idsToDelete) {
+      await apiDel(`/campaigns/${id}`);
+    }
+    loadCampaigns();
+  }
 
   return (
     <div className="app-container">
       <header>
-        <h1>Gerenciador de Campanhas</h1>
+        <h1>📣 Central de Campanhas</h1>
+        <p style={{opacity:.8, marginTop:6}}>
+          API {apiOnline ? "online ✅" : "offline ⚠️"}
+        </p>
       </header>
 
       <div className="tabs">
-        <button 
-          className={activeTab === "criar" ? "active" : ""} 
-          onClick={() => setActiveTab("criar")}
+        <button
+          className={tab === "create" ? "active" : ""}
+          onClick={() => setTab("create")}
         >
           Criar Campanha
         </button>
-        <button 
-          className={activeTab === "historico" ? "active" : ""} 
-          onClick={() => setActiveTab("historico")}
+        <button
+          className={tab === "history" ? "active" : ""}
+          onClick={() => { setTab("history"); loadCampaigns(); }}
         >
           Histórico
         </button>
       </div>
 
-      {/* Aba Criar Campanha */}
-      {activeTab === "criar" && (
+      {tab === "create" && (
         <div className="tab-content">
-          <form className="form-campanha">
-            <div className="form-group">
-              <label>Tag</label>
-              <input type="text" placeholder="Ex: Promoção" />
-            </div>
+          <div className="form-group">
+            <label>Tag</label>
+            <input value={tag} onChange={(e) => setTag(e.target.value)} placeholder="Tag" />
+          </div>
 
-            <div className="form-group">
-              <label>Vendedor</label>
-              <input type="text" placeholder="Ex: João" />
-            </div>
+          <div className="form-group">
+            <label>Vendedor</label>
+            <input value={vendor} onChange={(e) => setVendor(e.target.value)} placeholder="Vendedor" />
+          </div>
 
-            <div className="form-group">
-              <label>Última atividade (meses)</label>
-              <input type="number" placeholder="Ex: 3" />
-            </div>
+          <div className="form-group">
+            <label>Última atividade (meses)</label>
+            <input type="number" value={lastActivity} onChange={(e) => setLastActivity(e.target.value)} placeholder="Ex: 3" />
+          </div>
 
-            <div className="form-group">
-              <label>Modo de envio</label>
-              <select value={modoEnvio} onChange={(e) => setModoEnvio(e.target.value)}>
-                <option value="unico">Único</option>
-                <option value="recorrente">Recorrente</option>
-              </select>
-            </div>
+          <div className="form-group">
+            <label>Modo de envio</label>
+            <select value={mode} onChange={(e) => setMode(e.target.value)}>
+              <option value="single">Único</option>
+              <option value="recurring">Recorrente</option>
+            </select>
+          </div>
 
-            {modoEnvio === "unico" && (
+          {mode === "single" && (
+            <div className="form-group">
+              <label>Data de envio</label>
+              <input type="datetime-local" value={date} onChange={(e) => setDate(e.target.value)} />
+            </div>
+          )}
+
+          {mode === "recurring" && (
+            <>
               <div className="form-group">
-                <label>Data de envio</label>
-                <input type="date" />
+                <label>Validade até</label>
+                <input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
               </div>
-            )}
+              <div className="form-group">
+                <label>Intervalo (dias)</label>
+                <input type="number" value={interval} onChange={(e) => setInterval(e.target.value)} placeholder="Ex: 7" />
+              </div>
+            </>
+          )}
 
-            {modoEnvio === "recorrente" && (
-              <>
-                <div className="form-group">
-                  <label>Validade até</label>
-                  <input type="date" />
-                </div>
-                <div className="form-group">
-                  <label>Intervalo (dias)</label>
-                  <input type="number" placeholder="Ex: 7" />
-                </div>
-              </>
-            )}
+          <div className="form-group">
+            <label>Mensagem</label>
+            <textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Mensagem a ser enviada" />
+          </div>
 
+          <div className="form-group checkbox">
+            <input type="checkbox" checked={addPhotoMsg} onChange={() => setAddPhotoMsg(!addPhotoMsg)} />
+            <label>📷 Adicionar Mensagem para Foto</label>
+          </div>
+          {addPhotoMsg && (
             <div className="form-group">
-              <label>Mensagem</label>
-              <textarea placeholder="Digite a mensagem..." />
+              <input value={photoMsg} onChange={(e) => setPhotoMsg(e.target.value)} placeholder="URL ou legenda da foto" />
             </div>
+          )}
 
-            <div className="form-group checkbox">
-              <label>
-                <input type="checkbox" checked={mensagemExtraFoto} onChange={() => setMensagemExtraFoto(!mensagemExtraFoto)} />
-                📷 Adicionar Mensagem para Foto
-              </label>
+          <div className="form-group checkbox">
+            <input type="checkbox" checked={addUrlMsg} onChange={() => setAddUrlMsg(!addUrlMsg)} />
+            <label>🔗 Adicionar Mensagem para URL</label>
+          </div>
+          {addUrlMsg && (
+            <div className="form-group">
+              <input value={urlMsg} onChange={(e) => setUrlMsg(e.target.value)} placeholder="URL complementar" />
             </div>
-            {mensagemExtraFoto && (
-              <div className="form-group">
-                <input type="text" placeholder="Mensagem da foto" />
-              </div>
-            )}
+          )}
 
-            <div className="form-group checkbox">
-              <label>
-                <input type="checkbox" checked={mensagemExtraUrl} onChange={() => setMensagemExtraUrl(!mensagemExtraUrl)} />
-                🔗 Adicionar Mensagem para URL
-              </label>
-            </div>
-            {mensagemExtraUrl && (
-              <div className="form-group">
-                <input type="text" placeholder="Mensagem do link" />
-              </div>
-            )}
-
-            <button type="submit" className="btn-primary">Criar Campanha</button>
-          </form>
+          <button className="btn-primary" onClick={createCampaign}>Criar Campanha</button>
         </div>
       )}
 
-      {/* Aba Histórico */}
-      {activeTab === "historico" && (
+      {tab === "history" && (
         <div className="tab-content">
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Status</th>
-                <th>Tag</th>
-                <th>Vendedor</th>
-                <th>Última Atividade</th>
-                <th>Mensagem</th>
-                <th>Data/Validade/Intervalo</th>
-                <th>Ação</th>
-              </tr>
-            </thead>
-            <tbody>
-              {historico.map((item) => (
-                <tr key={item.id}>
-                  <td>{item.id}</td>
-                  <td>{item.status}</td>
-                  <td>{item.tag}</td>
-                  <td>{item.vendedor}</td>
-                  <td>{item.ultima} meses</td>
-                  <td>{item.mensagem}</td>
-                  <td>{item.data}</td>
-                  <td>
-                    {item.status === "scheduled" || item.status === "pending" ? (
-                      <button className="btn-danger" onClick={() => cancelarItem(item.id)}>❌ Cancelar</button>
-                    ) : (
-                      "-"
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {campaigns.length === 0 ? (
+            <div style={{opacity:.8}}>Nenhuma campanha registrada.</div>
+          ) : (
+            <div className="table-responsive">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Status</th>
+                    <th>Tag</th>
+                    <th>Vendedor</th>
+                    <th>Últ. Ativ.</th>
+                    <th>Mensagem</th>
+                    <th>Data / Validade / Intervalo</th>
+                    <th>Ação</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {campaigns.map((c) => (
+                    <tr key={c.id}>
+                      <td>{c.id}</td>
+                      <td>{c.status}</td>
+                      <td>{c.filter_tag || "-"}</td>
+                      <td>{c.filter_vendor || "-"}</td>
+                      <td>{c.last_activity_months ? `${c.last_activity_months}m` : "-"}</td>
+                      <td style={{maxWidth:320, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{c.message}</td>
+                      <td>
+                        {c.mode === "single"
+                          ? c.date
+                          : `${c.valid_until || "-"} / ${c.frequency_value || "-"}d`}
+                      </td>
+                      <td>
+                        {(c.status === "scheduled" || c.status === "pending") && (
+                          <button className="btn-danger" onClick={() => deleteCampaign(c.id)}>❌</button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
-          <button className="btn-secondary" onClick={limparHistorico}>
-            Limpar histórico
-          </button>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
+            <button className="btn-secondary" onClick={clearHistory}>Limpar histórico</button>
+          </div>
         </div>
       )}
     </div>
