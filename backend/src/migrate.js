@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { query } from './db.js';
 
 async function migrate() {
+  // Cria a tabela se não existir
   await query(`
     create table if not exists campaigns (
       id serial primary key,
@@ -19,10 +20,27 @@ async function migrate() {
       frequency_unit varchar(20),
       valid_until date,
       status varchar(20) not null default 'scheduled',
-      created_at timestamptz not null default now(),
-      filters jsonb default '{}'   -- <<< adicionando os filtros em formato JSON
+      created_at timestamptz not null default now()
     );
+  `);
 
+  // Adiciona a coluna filters se não existir
+  await query(`
+    do $$
+    begin
+      if not exists (
+        select 1
+        from information_schema.columns
+        where table_name = 'campaigns'
+        and column_name = 'filters'
+      ) then
+        alter table campaigns add column filters jsonb default '{}';
+      end if;
+    end $$;
+  `);
+
+  // Cria tabela de histórico
+  await query(`
     create table if not exists history (
       id serial primary key,
       campaign_id int references campaigns(id) on delete cascade,
@@ -42,5 +60,4 @@ migrate().catch(err => {
   console.error(err);
   process.exit(1);
 });
-
 
