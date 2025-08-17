@@ -22,11 +22,12 @@ services:
       - key: N8N_WEBHOOK_URL
         value: https://n8n.srv847937.hstgr.cloud/webhook/enviar-campanha
 
-  - type: static
+  - type: web
     name: central-frontend
+    env: static
     rootDir: frontend
     buildCommand: npm ci && npm run build
-    publishPath: dist
+    staticPublishPath: dist
     envVars:
       - key: VITE_API_BASE
         value: https://central-de-atendimento.onrender.com
