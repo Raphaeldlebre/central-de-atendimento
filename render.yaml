@@ -1,25 +1,32 @@
-
 services:
   - type: web
-    name: central-de-atendimento
+    name: central-backend
     env: node
-    plan: free
-    region: oregon
-    buildCommand: "npm install && npm run build"
-    startCommand: "npm start"
+    rootDir: backend
+    buildCommand: npm install && npm run migrate
+    startCommand: npm start
     autoDeploy: true
     envVars:
-      - key: NODE_VERSION
-        value: 18
       - key: PORT
         value: 10000
-      - key: DATABASE_URL
-        sync: false
+      - key: CORS_ORIGIN
+        value: "*"
       - key: BACKEND_PUBLIC_URL
-        sync: false
-      - key: N8N_WEBHOOK_URL
-        sync: false
+        value: https://central-de-atendimento.onrender.com
       - key: ACCOUNT_ID
-        sync: false
+        value: "2"
       - key: API_ACCESS_TOKEN
         sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: N8N_WEBHOOK_URL
+        value: https://n8n.srv847937.hstgr.cloud/webhook/enviar-campanha
+
+  - type: static
+    name: central-frontend
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    publishPath: dist
+    envVars:
+      - key: VITE_API_BASE
+        value: https://central-de-atendimento.onrender.com

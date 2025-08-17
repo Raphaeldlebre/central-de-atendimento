@@ -1,0 +1,21 @@
+{
+  "name": "central-de-atendimento-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "migrate": "node src/migrate.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "pg": "^8.11.5",
+    "pg-format": "^1.0.4",
+    "morgan": "^1.10.0",
+    "csv-stringify": "^6.5.2",
+    "node-fetch": "^3.3.2"
+  }
+}
