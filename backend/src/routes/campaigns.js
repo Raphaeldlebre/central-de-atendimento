@@ -4,67 +4,56 @@ import fetch from 'node-fetch';
 
 export const campaignsRouter = express.Router();
 
-// listar
+// list
 campaignsRouter.get('/', async (req,res)=>{
-  const { rows } = await query('select * from campaigns order by id desc');
+  const status = req.query.status;
+  let sql = 'select * from campaigns';
+  const params = [];
+  if (status && status !== 'all') {
+    params.push(status);
+    sql += ' where status = $1';
+  }
+  sql += ' order by id desc';
+  const { rows } = await query(sql, params);
   res.json(rows);
 });
 
-// criar
+// create
 campaignsRouter.post('/', async (req,res)=>{
   const c = req.body || {};
+  const fields = [
+    'message','image_url','link_url','filter_vendor','filter_tag','last_activity_months',
+    'mode','date','hour','block_size','frequency_value','frequency_unit','valid_until','status'
+  ];
+  const values = fields.map(k => c[k] ?? null);
+  values[13] = c.status ?? 'scheduled';
 
-  // converte dados do frontend
-  let date = null, hour = null, frequency_value = null, frequency_unit = null;
-  if (c.type === 'single' && c.scheduledAt) {
-    const d = new Date(c.scheduledAt);
-    date = d.toISOString().slice(0,10);
-    hour = d.getUTCHours();
-  }
-  if (c.type === 'recurring') {
-    frequency_value = c.repeatEveryDays || 1;
-    frequency_unit = 'days';
-  }
-
-  // insere no banco com filtros
-  const { rows } = await query(`
-    insert into campaigns
-      (message, image_url, link_url, mode, date, hour,
-       frequency_value, frequency_unit, valid_until, status, filters)
-    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-    returning *`,
-    [
-      c.message,
-      c.imageUrl || null,
-      c.link || null,
-      c.type || 'single',
-      date,
-      hour,
-      frequency_value,
-      frequency_unit,
-      c.validUntil || null,
-      'scheduled',
-      c.filters ? JSON.stringify(c.filters) : '{}'
-    ]
+  const placeholders = fields.map((_,i)=>'$'+(i+1)).join(',');
+  const { rows } = await query(
+    `insert into campaigns (${fields.join(',')}) values (${placeholders}) returning *`, values
   );
   const camp = rows[0];
 
-  // registra histórico
+  // registra no histórico
   await query(`insert into history (campaign_id, event, detail) values ($1,$2,$3)`,
     [camp.id, 'created', 'Campanha criada']);
 
-  // envia para o n8n se configurado
+  // dispara no n8n (opcional)
   if (process.env.N8N_WEBHOOK_URL) {
     const payload = {
       campaignId: camp.id,
-      type: camp.mode,
+      type: camp.mode === 'single' ? 'single' : 'recurring',
       message: camp.message,
       imageUrl: camp.image_url,
       link: camp.link_url,
-      filters: c.filters || {},
+      filters: {
+        useAgent: !!camp.filter_vendor, agent: camp.filter_vendor || '',
+        useTag: !!camp.filter_tag, tag: camp.filter_tag || '',
+        useLastActivity: !!camp.last_activity_months, lastActivityMonths: camp.last_activity_months || 0
+      },
       schedule: camp.mode === 'single'
-        ? { sendAt: c.scheduledAt }
-        : { frequencyUnit: frequency_unit, frequencyValue: frequency_value, validityDate: c.validUntil },
+        ? { sendAt: camp.date ? `${camp.date}T${String(camp.hour||0).padStart(2,'0')}:00:00Z` : null }
+        : { frequencyUnit: camp.frequency_unit, frequencyValue: camp.frequency_value, validityDate: camp.valid_until },
       callbackUrl: (process.env.BACKEND_PUBLIC_URL || '') + '/api/history',
       chatroot: { accountId: process.env.ACCOUNT_ID || '2', token: process.env.API_ACCESS_TOKEN || '' }
     };
@@ -85,7 +74,14 @@ campaignsRouter.post('/', async (req,res)=>{
   res.status(201).json(camp);
 });
 
-// cancelar
+// delete
+campaignsRouter.delete('/:id', async (req,res)=>{
+  const id = Number(req.params.id);
+  await query('delete from campaigns where id=$1',[id]);
+  res.json({ ok:true });
+});
+
+// cancel
 campaignsRouter.post('/:id/cancel', async (req,res)=>{
   const id = Number(req.params.id);
   await query('update campaigns set status=$1 where id=$2',['canceled', id]);
@@ -93,11 +89,3 @@ campaignsRouter.post('/:id/cancel', async (req,res)=>{
     [id, 'canceled', 'Cancelada pelo usuário']);
   res.json({ ok:true });
 });
-
-// deletar
-campaignsRouter.delete('/:id', async (req,res)=>{
-  const id = Number(req.params.id);
-  await query('delete from campaigns where id=$1',[id]);
-  res.json({ ok:true });
-});
-
