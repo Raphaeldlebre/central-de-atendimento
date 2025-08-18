@@ -84,12 +84,31 @@ router.post("/", async (req, res) => {
   }
 });
 
-// Excluir campanha
+// Excluir (cancelar) campanha
 router.delete("/:id", async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Deleta do banco
     await query("delete from campaigns where id = $1", [id]);
     res.json({ ok: true });
+
+    // 🔔 Notificar n8n do cancelamento
+    try {
+      const webhook = process.env.N8N_WEBHOOK_URL;
+      if (webhook) {
+        await fetch(webhook, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "cancel",
+            campaign_id: id,
+          }),
+        });
+      }
+    } catch (err) {
+      console.error("Falha ao notificar n8n do cancelamento:", err);
+    }
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Erro ao excluir/cancelar campanha" });
@@ -97,5 +116,4 @@ router.delete("/:id", async (req, res) => {
 });
 
 export default router;
-
 
